@@ -59,6 +59,11 @@ class DatabaseManager:
     def get_user_by_id(self, user_id):
         self.cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
         return self.cursor.fetchone()
+        
+    def get_user_by_name_and_pin(self, name, pin):
+        self.cursor.execute("SELECT account_number FROM users WHERE name = ? AND pin = ?", (name, pin))
+        result = self.cursor.fetchone()
+        return result[0] if result else None
 
     def update_balance(self, account_number, new_balance):
         self.cursor.execute("UPDATE users SET balance = ? WHERE account_number = ?", (new_balance, account_number))
@@ -138,8 +143,15 @@ class BankController:
     def sign_up(self, name, pin):
         if not name or len(pin) != 4 or not pin.isdigit(): return "Invalid Input. Pin must be 4 digits."
         account_number = str(random.randint(1000000000, 9999999999))
-        if self.db.create_user(name, pin, account_number): return f"Account Created! Your Account Number is {account_number}"
+        if self.db.create_user(name, pin, account_number): 
+            return f"Account Created Successfully!\n\nYour Account Number is:\n{account_number}\n\nPLEASE SAVE THIS NUMBER NOW."
         else: return "Error creating account. Try again."
+
+    def recover_account(self, name, pin):
+        acc_num = self.db.get_user_by_name_and_pin(name, pin)
+        if acc_num:
+            return True, f"Identity Verified!\n\nYour Account Number is:\n{acc_num}"
+        return False, "Verification Failed.\nName or PIN is incorrect."
 
     def sign_in(self, account_number, pin):
         user = self.db.get_user_by_account(account_number)
@@ -262,8 +274,44 @@ class ToastNotification(ctk.CTkToplevel):
         
         ctk.CTkLabel(self.frame, text=message, text_color="white", font=("Arial", 14, "bold"), wraplength=280).pack(pady=12, padx=15)
         
-        # Auto close
         self.after(3000, self.destroy)
+
+class RecoveryDialog(ctk.CTkToplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.title("Recover Account")
+        self.geometry("400x350")
+        self.resizable(False, False)
+        
+        # Center the window
+        try:
+            x = master.winfo_x() + (master.winfo_width() // 2) - 200
+            y = master.winfo_y() + (master.winfo_height() // 2) - 175
+            self.geometry(f"400x350+{x}+{y}")
+        except: pass
+
+        self.attributes("-topmost", True)
+        
+        ctk.CTkLabel(self, text="Recover Account Number", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=20)
+        ctk.CTkLabel(self, text="Enter your details to verify identity", text_color="gray").pack(pady=(0, 20))
+        
+        self.name = create_styled_entry(self, "Full Name", width=300)
+        self.name.pack(pady=10)
+        
+        self.pin = create_styled_entry(self, "4-Digit PIN", show="●", width=300)
+        self.pin.pack(pady=10)
+        
+        AnimatedButton(self, text="Recover Account", command=self.recover, width=300, fg_color="#4f46e5").pack(pady=20)
+        
+    def recover(self):
+        name = self.name.get()
+        pin = self.pin.get()
+        success, msg = self.master.master.controller.recover_account(name, pin)
+        if success:
+            messagebox.showinfo("Identity Verified", msg)
+            self.destroy()
+        else:
+            messagebox.showerror("Failed", msg)
 
 # Removed MobileEntry to fix layout issues. Using standard styled CTkEntry via helper.
 def create_styled_entry(master, placeholder, show=None, width=300):
@@ -403,7 +451,11 @@ class LoginFrame(ctk.CTkFrame):
         self.pin_entry = create_styled_entry(container, "PIN", show="●", width=300)
         self.pin_entry.pack(pady=10)
         
-        AnimatedButton(container, text="Sign In", command=self.login_event, width=300, height=45, fg_color="#4f46e5", hover_color="#4338ca").pack(pady=30)
+        AnimatedButton(container, text="Sign In", command=self.login_event, width=300, height=45, fg_color="#4f46e5", hover_color="#4338ca").pack(pady=20)
+        
+        # Forgot Account link
+        AnimatedButton(container, text="Forgot Account Number?", command=self.show_recovery, fg_color="transparent", text_color="gray", height=20, font=("Arial", 12)).pack(pady=(0, 20))
+        
         AnimatedButton(container, text="Create Account", command=self.show_register, fg_color="transparent", text_color="#4f46e5").pack()
 
     def login_event(self):
@@ -418,6 +470,9 @@ class LoginFrame(ctk.CTkFrame):
 
     def show_register(self):
         RegisterFrame(self.master).grid(row=0, column=0, columnspan=2, sticky="nsew")
+        
+    def show_recovery(self):
+        RecoveryDialog(self)
 
 class RegisterFrame(ctk.CTkFrame):
     def __init__(self, master):
@@ -438,7 +493,8 @@ class RegisterFrame(ctk.CTkFrame):
         pin = self.pin.get()
         msg = self.master.controller.sign_up(name, pin)
         if "Created" in msg:
-            self.master.show_toast(msg, "success")
+            # Persistent modal for successful registration
+            messagebox.showinfo("Success - Save This!", msg)
             self.master.show_login_frame()
         else:
             self.master.show_toast(msg, "error")
