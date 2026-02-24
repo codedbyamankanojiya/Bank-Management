@@ -11,6 +11,42 @@ try:
 except ImportError:
     pass
 
+UI_COLORS = {
+    "app_bg": ("#eef2ff", "#0b1220"),
+    "surface": ("#ffffff", "#111827"),
+    "surface_2": ("#f8fafc", "#0f172a"),
+    "border": ("#e5e7eb", "#1f2937"),
+    "text": ("#0f172a", "#e5e7eb"),
+    "muted": ("#64748b", "#94a3b8"),
+    "primary": ("#4f46e5", "#818cf8"),
+    "primary_hover": ("#4338ca", "#6366f1"),
+    "success": "#10b981",
+    "success_hover": "#059669",
+    "danger": "#ef4444",
+    "danger_hover": "#dc2626",
+    "warning": "#f59e0b",
+    "warning_hover": "#d97706",
+}
+
+UI_FONTS = None
+
+
+def init_ui_fonts():
+    global UI_FONTS
+    if UI_FONTS is not None:
+        return UI_FONTS
+    UI_FONTS = {
+        "h1": ctk.CTkFont(size=32, weight="bold"),
+        "h2": ctk.CTkFont(size=28, weight="bold"),
+        "h3": ctk.CTkFont(size=24, weight="bold"),
+        "h4": ctk.CTkFont(size=18, weight="bold"),
+        "body": ctk.CTkFont(size=14),
+        "body_b": ctk.CTkFont(size=14, weight="bold"),
+        "small": ctk.CTkFont(size=12),
+        "small_b": ctk.CTkFont(size=12, weight="bold"),
+    }
+    return UI_FONTS
+
 # --- Backend Logic (Unchanged) ---
 class DatabaseManager:
     def __init__(self, db_name="bank.db"):
@@ -255,14 +291,18 @@ class ToastNotification(ctk.CTkToplevel):
     def __init__(self, master, message, type="info"):
         super().__init__(master)
         self.overrideredirect(True)
-        # Simplify geometry calculation to avoid errors
+        self.withdraw()
+        self.update_idletasks()
         try:
-            x = master.winfo_x() + (master.winfo_width() // 2) - 150
-            y = master.winfo_y() + 60
-            self.geometry(f"300x50+{x}+{y}")
+            master.update_idletasks()
+            width = 360
+            height = 60
+            x = master.winfo_x() + master.winfo_width() - width - 24
+            y = master.winfo_y() + master.winfo_height() - height - 24
+            self.geometry(f"{width}x{height}+{max(x, 10)}+{max(y, 10)}")
         except:
-            # Fallback if master geometry is not ready
-            self.geometry("300x50+100+100")
+            self.geometry("360x60+100+100")
+        self.deiconify()
             
         self.attributes("-topmost", True)
         
@@ -272,7 +312,7 @@ class ToastNotification(ctk.CTkToplevel):
         self.frame = ctk.CTkFrame(self, fg_color=bg_color, corner_radius=10)
         self.frame.pack(fill="both", expand=True)
         
-        ctk.CTkLabel(self.frame, text=message, text_color="white", font=("Arial", 14, "bold"), wraplength=280).pack(pady=12, padx=15)
+        ctk.CTkLabel(self.frame, text=message, text_color="white", font=UI_FONTS["body_b"], wraplength=320).pack(pady=14, padx=16)
         
         self.after(3000, self.destroy)
 
@@ -292,16 +332,33 @@ class RecoveryDialog(ctk.CTkToplevel):
 
         self.attributes("-topmost", True)
         
-        ctk.CTkLabel(self, text="Recover Account Number", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=20)
-        ctk.CTkLabel(self, text="Enter your details to verify identity", text_color="gray").pack(pady=(0, 20))
+        ctk.CTkLabel(self, text="Recover Account Number", font=UI_FONTS["h4"], text_color=UI_COLORS["text"]).pack(pady=(22, 6))
+        ctk.CTkLabel(self, text="Enter your details to verify identity", text_color=UI_COLORS["muted"], font=UI_FONTS["small"]).pack(pady=(0, 18))
         
         self.name = create_styled_entry(self, "Full Name", width=300)
         self.name.pack(pady=10)
         
         self.pin = create_styled_entry(self, "4-Digit PIN", show="●", width=300)
         self.pin.pack(pady=10)
+
+        pin_row = ctk.CTkFrame(self, fg_color="transparent")
+        pin_row.pack(fill="x", padx=50, pady=(2, 0))
+        self.show_pin = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            pin_row,
+            text="Show PIN",
+            variable=self.show_pin,
+            command=self.toggle_pin,
+            fg_color=UI_COLORS["primary"],
+            hover_color=UI_COLORS["primary_hover"],
+            text_color=UI_COLORS["muted"],
+            font=UI_FONTS["small"],
+        ).pack(side="left")
         
-        AnimatedButton(self, text="Recover Account", command=self.recover, width=300, fg_color="#4f46e5").pack(pady=20)
+        AnimatedButton(self, text="Recover Account", command=self.recover, width=300, height=44, fg_color=UI_COLORS["primary"], hover_color=UI_COLORS["primary_hover"]).pack(pady=20)
+
+    def toggle_pin(self):
+        self.pin.configure(show="" if self.show_pin.get() else "●")
         
     def recover(self):
         name = self.name.get()
@@ -315,10 +372,27 @@ class RecoveryDialog(ctk.CTkToplevel):
 
 # Removed MobileEntry to fix layout issues. Using standard styled CTkEntry via helper.
 def create_styled_entry(master, placeholder, show=None, width=300):
-    return ctk.CTkEntry(master, placeholder_text=placeholder, show=show, width=width, height=45, font=("Arial", 14), corner_radius=10)
+    return ctk.CTkEntry(
+        master,
+        placeholder_text=placeholder,
+        show=show,
+        width=width,
+        height=44,
+        font=UI_FONTS["body"],
+        corner_radius=12,
+        border_width=1,
+        fg_color=UI_COLORS["surface"],
+        border_color=UI_COLORS["border"],
+        text_color=UI_COLORS["text"],
+        placeholder_text_color=UI_COLORS["muted"],
+    )
 
 class AnimatedButton(ctk.CTkButton):
     def __init__(self, master, **kwargs):
+        if "corner_radius" not in kwargs:
+            kwargs["corner_radius"] = 12
+        if "font" not in kwargs:
+            kwargs["font"] = UI_FONTS["body_b"]
         super().__init__(master, **kwargs)
         self.bind("<Enter>", self.on_enter)
         self.bind("<Leave>", self.on_leave)
@@ -344,32 +418,62 @@ class VirtualCard(ctk.CTkFrame):
         ctk.CTkLabel(self.card, text=name.upper(), font=("Arial", 16, "bold"), text_color="white").place(relx=0.1, rely=0.82)
         ctk.CTkLabel(self.card, text="12/29", font=("Arial", 14, "bold"), text_color="white").place(relx=0.7, rely=0.82)
 
+        AnimatedButton(
+            self.card,
+            text="Copy",
+            width=70,
+            height=30,
+            fg_color=("#ffffff", "#111827"),
+            hover_color=("#e5e7eb", "#0f172a"),
+            text_color=("#0f172a", "#e5e7eb"),
+            font=UI_FONTS["small_b"],
+            command=lambda n=account_num: self.copy_account(n),
+        ).place(relx=0.9, rely=0.88, anchor="se")
+
+    def copy_account(self, account_num):
+        try:
+            self.winfo_toplevel().clipboard_clear()
+            self.winfo_toplevel().clipboard_append(account_num)
+            self.winfo_toplevel().update()
+            if hasattr(self.winfo_toplevel(), "show_toast"):
+                self.winfo_toplevel().show_toast("Account number copied", "success")
+        except Exception:
+            pass
+
 class BankApp(ctk.CTk):
     def __init__(self):
         super().__init__()
+        init_ui_fonts()
         self.controller = BankController()
         self.title("SecureBank Pro - Stable")
-        self.geometry("1300x850")
+        self.geometry("1200x820")
+        self.minsize(980, 680)
         
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
         
         self.sidebar_frame = None
         self.content_frame = None
+        self._active_toast = None
         
         self.show_login_frame()
 
     def show_toast(self, message, type="info"):
-        ToastNotification(self, message, type)
+        try:
+            if self._active_toast and self._active_toast.winfo_exists():
+                self._active_toast.destroy()
+        except Exception:
+            pass
+        self._active_toast = ToastNotification(self, message, type)
 
     def create_sidebar(self):
         if self.sidebar_frame: self.sidebar_frame.destroy()
         
-        self.sidebar_frame = ctk.CTkFrame(self, width=250, corner_radius=0, fg_color=("#f1f5f9", "#1e293b"))
+        self.sidebar_frame = ctk.CTkFrame(self, width=250, corner_radius=0, fg_color=UI_COLORS["surface_2"])
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
         
-        ctk.CTkLabel(self.sidebar_frame, text="🏦 SecureBank", font=ctk.CTkFont(size=24, weight="bold"), text_color=("#4f46e5", "#818cf8")).pack(pady=(40, 5))
-        ctk.CTkLabel(self.sidebar_frame, text="PREMIUM", font=ctk.CTkFont(size=10, weight="bold"), text_color="#64748b").pack(pady=(0, 40))
+        ctk.CTkLabel(self.sidebar_frame, text="🏦 SecureBank", font=UI_FONTS["h3"], text_color=UI_COLORS["primary"]).pack(pady=(36, 4))
+        ctk.CTkLabel(self.sidebar_frame, text="PREMIUM", font=UI_FONTS["small_b"], text_color=UI_COLORS["muted"]).pack(pady=(0, 36))
         
         self.nav_buttons = {}
         buttons = [
@@ -384,13 +488,13 @@ class BankApp(ctk.CTk):
             btn = AnimatedButton(self.sidebar_frame, text=text, command=lambda c=cmd, t=text: self.nav_click(c, t), 
                           fg_color="transparent", text_color=("#1e293b", "#e2e8f0"),
                           hover_color=("#e2e8f0", "#334155"), anchor="w", 
-                          width=220, height=45, font=ctk.CTkFont(size=16))
+                          width=220, height=44, font=ctk.CTkFont(size=15, weight="bold"))
             btn.pack(pady=5)
             self.nav_buttons[text] = btn
             
         AnimatedButton(self.sidebar_frame, text="🚪 Logout", command=self.logout_event,
                       fg_color=("#fee2e2", "#7f1d1d"), hover_color=("#fecaca", "#991b1b"),
-                      text_color=("#dc2626", "#fca5a5"), width=200).pack(side="bottom", pady=30)
+                      text_color=("#dc2626", "#fca5a5"), width=200, height=40).pack(side="bottom", pady=26)
 
     def nav_click(self, cmd, text):
         for name, btn in self.nav_buttons.items():
@@ -439,24 +543,40 @@ class BankApp(ctk.CTk):
 
 class LoginFrame(ctk.CTkFrame):
     def __init__(self, master):
-        super().__init__(master, fg_color=("#e0e7ff", "#0f172a"))
-        container = ctk.CTkFrame(self, fg_color=("#ffffff", "#1e293b"), corner_radius=25, width=400, height=550)
+        super().__init__(master, fg_color=UI_COLORS["app_bg"])
+        container = ctk.CTkFrame(self, fg_color=UI_COLORS["surface"], corner_radius=26, width=420, height=590)
         container.place(relx=0.5, rely=0.5, anchor="center")
         
-        ctk.CTkLabel(container, text="🏦 SecureBank", font=ctk.CTkFont(size=32, weight="bold")).pack(pady=(40, 20))
+        ctk.CTkLabel(container, text="🏦 SecureBank", font=UI_FONTS["h1"], text_color=UI_COLORS["text"]).pack(pady=(44, 18))
         
         self.acc_entry = create_styled_entry(container, "Account Number", width=300)
         self.acc_entry.pack(pady=10)
         
         self.pin_entry = create_styled_entry(container, "PIN", show="●", width=300)
         self.pin_entry.pack(pady=10)
+
+        pin_row = ctk.CTkFrame(container, fg_color="transparent")
+        pin_row.pack(fill="x", padx=58, pady=(2, 0))
+        self.show_pin = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            pin_row,
+            text="Show PIN",
+            variable=self.show_pin,
+            command=self.toggle_pin,
+            fg_color=UI_COLORS["primary"],
+            hover_color=UI_COLORS["primary_hover"],
+            text_color=UI_COLORS["muted"],
+            font=UI_FONTS["small"],
+        ).pack(side="left")
         
-        AnimatedButton(container, text="Sign In", command=self.login_event, width=300, height=45, fg_color="#4f46e5", hover_color="#4338ca").pack(pady=20)
+        AnimatedButton(container, text="Sign In", command=self.login_event, width=300, height=46, fg_color=UI_COLORS["primary"], hover_color=UI_COLORS["primary_hover"]).pack(pady=(20, 14))
         
-        # Forgot Account link
-        AnimatedButton(container, text="Forgot Account Number?", command=self.show_recovery, fg_color="transparent", text_color="gray", height=20, font=("Arial", 12)).pack(pady=(0, 20))
+        AnimatedButton(container, text="Forgot Account Number?", command=self.show_recovery, fg_color="transparent", text_color=UI_COLORS["muted"], height=24, font=UI_FONTS["small"]).pack(pady=(0, 18))
         
-        AnimatedButton(container, text="Create Account", command=self.show_register, fg_color="transparent", text_color="#4f46e5").pack()
+        AnimatedButton(container, text="Create Account", command=self.show_register, fg_color="transparent", text_color=UI_COLORS["primary"], height=28).pack()
+
+    def toggle_pin(self):
+        self.pin_entry.configure(show="" if self.show_pin.get() else "●")
 
     def login_event(self):
         acc = self.acc_entry.get()
@@ -476,17 +596,35 @@ class LoginFrame(ctk.CTkFrame):
 
 class RegisterFrame(ctk.CTkFrame):
     def __init__(self, master):
-        super().__init__(master, fg_color=("#dcfce7", "#0f172a"))
-        container = ctk.CTkFrame(self, fg_color=("#ffffff", "#1e293b"), corner_radius=25, width=400, height=550)
+        super().__init__(master, fg_color=UI_COLORS["app_bg"])
+        container = ctk.CTkFrame(self, fg_color=UI_COLORS["surface"], corner_radius=26, width=420, height=590)
         container.place(relx=0.5, rely=0.5, anchor="center")
         
-        ctk.CTkLabel(container, text="Create Account", font=ctk.CTkFont(size=30, weight="bold")).pack(pady=30)
+        ctk.CTkLabel(container, text="Create Account", font=UI_FONTS["h1"], text_color=UI_COLORS["text"]).pack(pady=(42, 22))
         self.name = create_styled_entry(container, "Full Name", width=300)
         self.name.pack(pady=10)
         self.pin = create_styled_entry(container, "4-Digit PIN", show="●", width=300)
         self.pin.pack(pady=10)
-        AnimatedButton(container, text="Register", command=self.register, width=300, height=45, fg_color="#10b981", hover_color="#059669").pack(pady=30)
-        AnimatedButton(container, text="Back to Login", command=master.show_login_frame, fg_color="transparent", text_color="#10b981").pack()
+
+        pin_row = ctk.CTkFrame(container, fg_color="transparent")
+        pin_row.pack(fill="x", padx=58, pady=(2, 0))
+        self.show_pin = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            pin_row,
+            text="Show PIN",
+            variable=self.show_pin,
+            command=self.toggle_pin,
+            fg_color=UI_COLORS["primary"],
+            hover_color=UI_COLORS["primary_hover"],
+            text_color=UI_COLORS["muted"],
+            font=UI_FONTS["small"],
+        ).pack(side="left")
+
+        AnimatedButton(container, text="Register", command=self.register, width=300, height=46, fg_color=UI_COLORS["success"], hover_color=UI_COLORS["success_hover"]).pack(pady=(26, 18))
+        AnimatedButton(container, text="Back to Login", command=master.show_login_frame, fg_color="transparent", text_color=UI_COLORS["success"], height=28).pack()
+
+    def toggle_pin(self):
+        self.pin.configure(show="" if self.show_pin.get() else "●")
 
     def register(self):
         name = self.name.get()
@@ -504,21 +642,49 @@ class DashboardFrame(ctk.CTkScrollableFrame):
         super().__init__(master, fg_color="transparent")
         self.controller = master.controller
         user = self.controller.current_user
+
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 16))
+        ctk.CTkLabel(header, text=f"Hello, {user['name']} 👋", font=UI_FONTS["h1"], text_color=UI_COLORS["text"]).pack(side="left")
+        AnimatedButton(
+            header,
+            text="⟳ Refresh",
+            command=self.refresh_data,
+            width=120,
+            height=38,
+            fg_color=UI_COLORS["surface_2"],
+            hover_color=("#e2e8f0", "#334155"),
+            text_color=UI_COLORS["text"],
+            font=UI_FONTS["small_b"],
+        ).pack(side="right")
         
-        ctk.CTkLabel(self, text=f"Hello, {user['name']} 👋", font=ctk.CTkFont(size=32, weight="bold")).pack(anchor="w", pady=(0, 20))
-        
-        # Cards Row
         row1 = ctk.CTkFrame(self, fg_color="transparent")
         row1.pack(fill="x", pady=10)
-        VirtualCard(row1, user['name'], user['account_number']).pack(side="left", padx=(0, 20))
+        row1.grid_columnconfigure(0, weight=0)
+        row1.grid_columnconfigure(1, weight=1)
+        row1.grid_rowconfigure(0, weight=1)
+
+        VirtualCard(row1, user['name'], user['account_number']).grid(row=0, column=0, sticky="nw", padx=(0, 18), pady=0)
+
+        bal_frame = ctk.CTkFrame(row1, fg_color=UI_COLORS["surface"], corner_radius=20, height=220)
+        bal_frame.grid(row=0, column=1, sticky="nsew")
+        ctk.CTkLabel(bal_frame, text="Current Balance", font=UI_FONTS["small_b"], text_color=UI_COLORS["muted"]).pack(pady=(44, 8))
+        self.balance_value = ctk.CTkLabel(bal_frame, text=f"₹{self.controller.get_balance():,}", font=ctk.CTkFont(size=46, weight="bold"), text_color=UI_COLORS["success"])
+        self.balance_value.pack()
+
+        AnimatedButton(
+            bal_frame,
+            text="Refresh Balance",
+            command=self.refresh_data,
+            width=160,
+            height=34,
+            fg_color=UI_COLORS["surface_2"],
+            hover_color=("#e2e8f0", "#334155"),
+            text_color=UI_COLORS["text"],
+            font=UI_FONTS["small_b"],
+        ).pack(pady=(14, 0))
         
-        bal_frame = ctk.CTkFrame(row1, fg_color=("#ffffff", "#1e293b"), corner_radius=20, height=220)
-        bal_frame.pack(side="left", fill="both", expand=True)
-        ctk.CTkLabel(bal_frame, text="Current Balance", font=ctk.CTkFont(size=14, weight="bold"), text_color="gray").pack(pady=(40, 10))
-        ctk.CTkLabel(bal_frame, text=f"₹{self.controller.get_balance():,}", font=ctk.CTkFont(size=48, weight="bold"), text_color="#10b981").pack()
-        
-        # Quick Transfer Carousel
-        ctk.CTkLabel(self, text="Recent People", font=ctk.CTkFont(size=18, weight="bold")).pack(anchor="w", pady=(30, 10))
+        ctk.CTkLabel(self, text="Recent People", font=UI_FONTS["h4"], text_color=UI_COLORS["text"]).pack(anchor="w", pady=(28, 10))
         people_frame = ctk.CTkFrame(self, fg_color="transparent")
         people_frame.pack(fill="x", anchor="w")
         
@@ -539,34 +705,32 @@ class DashboardFrame(ctk.CTkScrollableFrame):
         else:
             ctk.CTkLabel(people_frame, text="No recent transfers", text_color="gray").pack(anchor="w")
 
-        # Layout: Recent Activity Widget & Quick Actions
         lower_row = ctk.CTkFrame(self, fg_color="transparent")
-        lower_row.pack(fill="x", pady=30)
-        
-        # Recent Activity Widget
-        activity_frame = ctk.CTkFrame(lower_row, fg_color=("#ffffff", "#1e293b"), corner_radius=20, width=500)
-        activity_frame.pack(side="left", fill="both", expand=True, padx=(0, 20))
-        ctk.CTkLabel(activity_frame, text="Recent Activity", font=ctk.CTkFont(size=18, weight="bold")).pack(anchor="w", padx=20, pady=20)
-        
-        trans = self.controller.get_transaction_history(3)
-        if trans:
-            for t in trans:
-                self.create_mini_trans(activity_frame, t)
-        else:
-            ctk.CTkLabel(activity_frame, text="No recent activity", text_color="gray").pack(pady=20)
+        lower_row.pack(fill="x", pady=28)
+        lower_row.grid_columnconfigure(0, weight=1)
+        lower_row.grid_columnconfigure(1, weight=0)
+
+        activity_frame = ctk.CTkFrame(lower_row, fg_color=UI_COLORS["surface"], corner_radius=20)
+        activity_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 18))
+        ctk.CTkLabel(activity_frame, text="Recent Activity", font=UI_FONTS["h4"], text_color=UI_COLORS["text"]).pack(anchor="w", padx=20, pady=20)
+
+        self.activity_list = ctk.CTkFrame(activity_frame, fg_color="transparent")
+        self.activity_list.pack(fill="x")
             
-        # Quick Actions
-        actions_frame = ctk.CTkFrame(lower_row, fg_color=("#ffffff", "#1e293b"), corner_radius=20, width=300)
-        actions_frame.pack(side="left", fill="both")
-        ctk.CTkLabel(actions_frame, text="Quick Transaction", font=ctk.CTkFont(size=18, weight="bold")).pack(anchor="w", padx=20, pady=20)
+        actions_frame = ctk.CTkFrame(lower_row, fg_color=UI_COLORS["surface"], corner_radius=20, width=320)
+        actions_frame.grid(row=0, column=1, sticky="nsew")
+        actions_frame.grid_propagate(False)
+        ctk.CTkLabel(actions_frame, text="Quick Transaction", font=UI_FONTS["h4"], text_color=UI_COLORS["text"]).pack(anchor="w", padx=20, pady=20)
         
         self.amount_entry = create_styled_entry(actions_frame, "Amount", width=250)
         self.amount_entry.pack(pady=10, padx=20)
         
         btns = ctk.CTkFrame(actions_frame, fg_color="transparent")
         btns.pack(pady=10)
-        AnimatedButton(btns, text="Deposit", command=self.deposit, fg_color="#10b981", width=120).pack(side="left", padx=5)
-        AnimatedButton(btns, text="Withdraw", command=self.withdraw, fg_color="#ef4444", width=120).pack(side="left", padx=5)
+        AnimatedButton(btns, text="Deposit", command=self.deposit, fg_color=UI_COLORS["success"], hover_color=UI_COLORS["success_hover"], width=120).pack(side="left", padx=5)
+        AnimatedButton(btns, text="Withdraw", command=self.withdraw, fg_color=UI_COLORS["danger"], hover_color=UI_COLORS["danger_hover"], width=120).pack(side="left", padx=5)
+
+        self.refresh_data()
         
     def create_mini_trans(self, master, t):
         type_, amt, _, time, _ = t
@@ -575,18 +739,42 @@ class DashboardFrame(ctk.CTkScrollableFrame):
         color = "#10b981" if type_ in ["DEPOSIT", "TRANSFER_IN"] else "#ef4444"
         ctk.CTkLabel(row, text=type_.replace("_", " "), font=("Arial", 12, "bold")).pack(side="left")
         ctk.CTkLabel(row, text=f"₹{amt:,}", font=("Arial", 12, "bold"), text_color=color).pack(side="right")
+
+    def refresh_data(self):
+        try:
+            if self.balance_value and self.balance_value.winfo_exists():
+                self.balance_value.configure(text=f"₹{self.controller.get_balance():,}")
+        except Exception:
+            pass
+
+        try:
+            for child in self.activity_list.winfo_children():
+                child.destroy()
+        except Exception:
+            pass
+
+        trans = self.controller.get_transaction_history(3)
+        if trans:
+            for t in trans:
+                self.create_mini_trans(self.activity_list, t)
+        else:
+            ctk.CTkLabel(self.activity_list, text="No recent activity", text_color=UI_COLORS["muted"], font=UI_FONTS["small"]).pack(pady=(0, 20))
         
     def deposit(self):
         amt = self.amount_entry.get()
         success, msg = self.controller.deposit(amt)
         self.master.show_toast(msg, "success" if success else "error")
-        if success: self.master.show_dashboard_frame()
+        if success:
+            self.amount_entry.delete(0, "end")
+            self.refresh_data()
         
     def withdraw(self):
         amt = self.amount_entry.get()
         success, msg = self.controller.withdraw(amt)
         self.master.show_toast(msg, "success" if success else "error")
-        if success: self.master.show_dashboard_frame()
+        if success:
+            self.amount_entry.delete(0, "end")
+            self.refresh_data()
 
     def quick_transfer(self, acc):
         self.master.show_transfer_frame()
@@ -595,15 +783,15 @@ class DashboardFrame(ctk.CTkScrollableFrame):
 class TransferFrame(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master, fg_color="transparent")
-        container = ctk.CTkFrame(self, fg_color=("#ffffff", "#1e293b"), corner_radius=20)
+        container = ctk.CTkFrame(self, fg_color=UI_COLORS["surface"], corner_radius=20)
         container.pack(fill="both", expand=True, padx=50, pady=50)
         
-        ctk.CTkLabel(container, text="Transfer Money", font=ctk.CTkFont(size=24, weight="bold")).pack(pady=40)
+        ctk.CTkLabel(container, text="Transfer Money", font=UI_FONTS["h2"], text_color=UI_COLORS["text"]).pack(pady=(42, 22))
         self.recip = create_styled_entry(container, "Recipient Account Number", width=400)
-        self.recip.pack(pady=20)
+        self.recip.pack(pady=12)
         self.amt = create_styled_entry(container, "Amount (₹)", width=400)
-        self.amt.pack(pady=20)
-        AnimatedButton(container, text="Send Money", command=self.send, width=400, height=50, fg_color="#4f46e5").pack(pady=40)
+        self.amt.pack(pady=12)
+        AnimatedButton(container, text="Send Money", command=self.send, width=400, height=48, fg_color=UI_COLORS["primary"], hover_color=UI_COLORS["primary_hover"]).pack(pady=(22, 0))
         
     def send(self):
         success, msg = self.master.controller.transfer(self.recip.get(), self.amt.get())
@@ -619,22 +807,39 @@ class HistoryFrame(ctk.CTkScrollableFrame):
         super().__init__(master, fg_color="transparent")
         header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", pady=20)
-        ctk.CTkLabel(header, text="Transaction History", font=ctk.CTkFont(size=24, weight="bold")).pack(side="left")
-        AnimatedButton(header, text="📥 Export CSV", command=self.export_csv, width=120, fg_color="#64748b").pack(side="right")
+        ctk.CTkLabel(header, text="Transaction History", font=UI_FONTS["h2"], text_color=UI_COLORS["text"]).pack(side="left")
+        AnimatedButton(
+            header,
+            text="📥 Export CSV",
+            command=self.export_csv,
+            width=140,
+            height=38,
+            fg_color=UI_COLORS["surface_2"],
+            hover_color=("#e2e8f0", "#334155"),
+            text_color=UI_COLORS["text"],
+            font=UI_FONTS["small_b"],
+        ).pack(side="right")
         trans = master.controller.get_transaction_history()
-        for t in trans: self.create_trans_row(t)
+        if trans:
+            for t in trans:
+                self.create_trans_row(t)
+        else:
+            empty = ctk.CTkFrame(self, fg_color=UI_COLORS["surface"], corner_radius=16)
+            empty.pack(fill="x", pady=10)
+            ctk.CTkLabel(empty, text="No transactions yet", font=UI_FONTS["body_b"], text_color=UI_COLORS["text"]).pack(pady=(18, 2))
+            ctk.CTkLabel(empty, text="Your deposits, withdrawals and transfers will appear here.", font=UI_FONTS["small"], text_color=UI_COLORS["muted"]).pack(pady=(0, 18))
             
     def create_trans_row(self, t):
         type_, amt, recip, time, desc = t
-        color = "#10b981" if type_ in ["DEPOSIT", "TRANSFER_IN"] else "#ef4444"
-        row = ctk.CTkFrame(self, fg_color=("#ffffff", "#1e293b"), corner_radius=10, height=60)
+        color = UI_COLORS["success"] if type_ in ["DEPOSIT", "TRANSFER_IN"] else UI_COLORS["danger"]
+        row = ctk.CTkFrame(self, fg_color=UI_COLORS["surface"], corner_radius=14, height=64)
         row.pack(fill="x", pady=5)
         ctk.CTkLabel(row, text="⬇" if "IN" in type_ or "DEPOSIT" in type_ else "⬆", font=("Arial", 20), text_color=color).pack(side="left", padx=20)
         info = ctk.CTkFrame(row, fg_color="transparent")
         info.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(info, text=desc if desc else type_, font=("Arial", 14, "bold")).pack(anchor="w")
-        ctk.CTkLabel(info, text=time, font=("Arial", 10), text_color="gray").pack(anchor="w")
-        ctk.CTkLabel(row, text=f"₹{amt:,}", font=("Arial", 16, "bold"), text_color=color).pack(side="right", padx=20)
+        ctk.CTkLabel(info, text=desc if desc else type_, font=UI_FONTS["body_b"], text_color=UI_COLORS["text"]).pack(anchor="w")
+        ctk.CTkLabel(info, text=time, font=UI_FONTS["small"], text_color=UI_COLORS["muted"]).pack(anchor="w")
+        ctk.CTkLabel(row, text=f"₹{amt:,}", font=ctk.CTkFont(size=16, weight="bold"), text_color=color).pack(side="right", padx=20)
 
     def export_csv(self):
         filename = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV Files", "*.csv")])
@@ -645,42 +850,42 @@ class HistoryFrame(ctk.CTkScrollableFrame):
 class AnalyticsFrame(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master, fg_color="transparent")
-        ctk.CTkLabel(self, text="Financial Insights", font=ctk.CTkFont(size=28, weight="bold")).pack(anchor="w", pady=20)
+        ctk.CTkLabel(self, text="Financial Insights", font=UI_FONTS["h1"], text_color=UI_COLORS["text"]).pack(anchor="w", pady=(0, 16))
         data = master.controller.get_analytics()
         income, expense = data['income'], abs(data['expense'])
         total = income + expense if (income + expense) > 0 else 1
         
-        container = ctk.CTkFrame(self, fg_color=("#ffffff", "#1e293b"), corner_radius=20)
+        container = ctk.CTkFrame(self, fg_color=UI_COLORS["surface"], corner_radius=20)
         container.pack(fill="both", expand=True, padx=20, pady=20)
         
         for label, val, col in [("Total Income", income, "#10b981"), ("Total Expenses", expense, "#ef4444")]:
-            ctk.CTkLabel(container, text=label, text_color=col).pack(anchor="w", padx=20, pady=(20, 5))
+            ctk.CTkLabel(container, text=label, text_color=col, font=UI_FONTS["small_b"]).pack(anchor="w", padx=20, pady=(20, 6))
             bar = ctk.CTkProgressBar(container, progress_color=col, height=20)
             bar.pack(fill="x", padx=20)
             bar.set(val / total)
-            ctk.CTkLabel(container, text=f"₹{val:,}", font=("Arial", 16, "bold")).pack(anchor="w", padx=20)
+            ctk.CTkLabel(container, text=f"₹{val:,}", font=ctk.CTkFont(size=16, weight="bold"), text_color=UI_COLORS["text"]).pack(anchor="w", padx=20, pady=(8, 0))
 
 class SettingsFrame(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master, fg_color="transparent")
-        ctk.CTkLabel(self, text="Settings", font=ctk.CTkFont(size=28, weight="bold")).pack(anchor="w", pady=20)
+        ctk.CTkLabel(self, text="Settings", font=UI_FONTS["h1"], text_color=UI_COLORS["text"]).pack(anchor="w", pady=(0, 16))
         
-        theme_frame = ctk.CTkFrame(self, fg_color=("#ffffff", "#1e293b"), corner_radius=15)
+        theme_frame = ctk.CTkFrame(self, fg_color=UI_COLORS["surface"], corner_radius=16)
         theme_frame.pack(fill="x", pady=10, ipady=10)
-        ctk.CTkLabel(theme_frame, text="Dark Mode", font=("Arial", 16, "bold")).pack(side="left", padx=20)
+        ctk.CTkLabel(theme_frame, text="Dark Mode", font=UI_FONTS["body_b"], text_color=UI_COLORS["text"]).pack(side="left", padx=20)
         self.switch = ctk.CTkSwitch(theme_frame, text="", command=self.toggle_theme)
         if ctk.get_appearance_mode() == "Dark": self.switch.select()
         self.switch.pack(side="right", padx=20)
         
-        pin_frame = ctk.CTkFrame(self, fg_color=("#ffffff", "#1e293b"), corner_radius=15)
+        pin_frame = ctk.CTkFrame(self, fg_color=UI_COLORS["surface"], corner_radius=16)
         pin_frame.pack(fill="x", pady=10, ipady=20)
-        ctk.CTkLabel(pin_frame, text="Change PIN", font=("Arial", 16, "bold")).pack(anchor="w", padx=20, pady=10)
+        ctk.CTkLabel(pin_frame, text="Change PIN", font=UI_FONTS["body_b"], text_color=UI_COLORS["text"]).pack(anchor="w", padx=20, pady=(14, 10))
         
         self.old = create_styled_entry(pin_frame, "Old PIN", show="●", width=300)
         self.old.pack(pady=5)
         self.new = create_styled_entry(pin_frame, "New PIN", show="●", width=300)
         self.new.pack(pady=5)
-        AnimatedButton(pin_frame, text="Update", command=self.update_pin, fg_color="#f59e0b").pack(pady=10)
+        AnimatedButton(pin_frame, text="Update", command=self.update_pin, fg_color=UI_COLORS["warning"], hover_color=UI_COLORS["warning_hover"], height=40).pack(pady=(12, 0))
 
     def toggle_theme(self): ctk.set_appearance_mode("Dark" if self.switch.get() else "Light")
     def update_pin(self):
