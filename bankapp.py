@@ -579,7 +579,7 @@ class BankApp(ctk.CTk):
         super().__init__()
         init_ui_fonts()
         self.controller = BankController()
-        self.title("SecureBank Pro - Stable")
+        self.title("Secure Bank")
         self.geometry("1200x820")
         self.minsize(980, 680)
         
