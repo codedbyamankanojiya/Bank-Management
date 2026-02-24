@@ -2,6 +2,7 @@ import sqlite3
 import random
 import os
 import csv
+import re
 from tkinter import messagebox, filedialog
 from datetime import datetime
 import customtkinter as ctk
@@ -46,6 +47,13 @@ def init_ui_fonts():
         "small_b": ctk.CTkFont(size=12, weight="bold"),
     }
     return UI_FONTS
+
+
+def extract_account_number(text):
+    if not text:
+        return None
+    match = re.search(r"\b\d{10}\b", text)
+    return match.group(0) if match else None
 
 # --- Backend Logic (Unchanged) ---
 class DatabaseManager:
@@ -316,6 +324,112 @@ class ToastNotification(ctk.CTkToplevel):
         
         self.after(3000, self.destroy)
 
+
+class AccountInfoDialog(ctk.CTkToplevel):
+    def __init__(self, master, title, subtitle, account_number, primary_action_text="Go to Login", primary_action=None):
+        super().__init__(master)
+        self.title(title)
+        self.geometry("520x320")
+        self.resizable(False, False)
+
+        try:
+            master.update_idletasks()
+            x = master.winfo_x() + (master.winfo_width() // 2) - 260
+            y = master.winfo_y() + (master.winfo_height() // 2) - 160
+            self.geometry(f"520x320+{max(x, 10)}+{max(y, 10)}")
+        except Exception:
+            pass
+
+        self.transient(master)
+        self.grab_set()
+        self.attributes("-topmost", True)
+
+        surface = ctk.CTkFrame(self, fg_color=UI_COLORS["surface"], corner_radius=22)
+        surface.pack(fill="both", expand=True, padx=18, pady=18)
+
+        ctk.CTkLabel(surface, text=title, font=UI_FONTS["h3"], text_color=UI_COLORS["text"]).pack(pady=(26, 6))
+        ctk.CTkLabel(surface, text=subtitle, font=UI_FONTS["small"], text_color=UI_COLORS["muted"], wraplength=460).pack(pady=(0, 18))
+
+        card = ctk.CTkFrame(surface, fg_color=UI_COLORS["surface_2"], corner_radius=16)
+        card.pack(fill="x", padx=22, pady=(0, 16))
+
+        ctk.CTkLabel(card, text="Account Number", font=UI_FONTS["small_b"], text_color=UI_COLORS["muted"]).pack(anchor="w", padx=18, pady=(16, 6))
+
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", padx=18, pady=(0, 16))
+        row.grid_columnconfigure(0, weight=1)
+        row.grid_columnconfigure(1, weight=0)
+
+        self._account = str(account_number)
+
+        entry = ctk.CTkEntry(
+            row,
+            height=44,
+            font=UI_FONTS["body_b"],
+            corner_radius=12,
+            border_width=1,
+            fg_color=UI_COLORS["surface"],
+            border_color=UI_COLORS["border"],
+            text_color=UI_COLORS["text"],
+        )
+        entry.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        entry.insert(0, self._account)
+        entry.configure(state="readonly")
+
+        AnimatedButton(
+            row,
+            text="Copy",
+            width=90,
+            height=44,
+            fg_color=UI_COLORS["primary"],
+            hover_color=UI_COLORS["primary_hover"],
+            command=self.copy_account,
+        ).grid(row=0, column=1, sticky="e")
+
+        btn_row = ctk.CTkFrame(surface, fg_color="transparent")
+        btn_row.pack(fill="x", padx=22, pady=(0, 8))
+        btn_row.grid_columnconfigure(0, weight=1)
+        btn_row.grid_columnconfigure(1, weight=0)
+
+        AnimatedButton(
+            btn_row,
+            text="Close",
+            width=120,
+            height=40,
+            fg_color=UI_COLORS["surface_2"],
+            hover_color=("#e2e8f0", "#334155"),
+            text_color=UI_COLORS["text"],
+            font=UI_FONTS["small_b"],
+            command=self.destroy,
+        ).grid(row=0, column=0, sticky="w")
+
+        if primary_action is not None:
+            AnimatedButton(
+                btn_row,
+                text=primary_action_text,
+                width=160,
+                height=40,
+                fg_color=UI_COLORS["success"],
+                hover_color=UI_COLORS["success_hover"],
+                command=lambda: self._do_primary(primary_action),
+            ).grid(row=0, column=1, sticky="e")
+
+    def _do_primary(self, action):
+        try:
+            action()
+        finally:
+            self.destroy()
+
+    def copy_account(self):
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(self._account)
+            self.update()
+            if hasattr(self.master, "show_toast"):
+                self.master.show_toast("Account number copied", "success")
+        except Exception:
+            pass
+
 class RecoveryDialog(ctk.CTkToplevel):
     def __init__(self, master):
         super().__init__(master)
@@ -365,8 +479,28 @@ class RecoveryDialog(ctk.CTkToplevel):
         pin = self.pin.get()
         success, msg = self.master.master.controller.recover_account(name, pin)
         if success:
-            messagebox.showinfo("Identity Verified", msg)
-            self.destroy()
+            acc = extract_account_number(msg)
+            if acc:
+                try:
+                    self.grab_release()
+                except Exception:
+                    pass
+                try:
+                    self.withdraw()
+                except Exception:
+                    pass
+                AccountInfoDialog(
+                    self.master.master,
+                    title="Account Recovered",
+                    subtitle="We verified your identity. Copy your account number and keep it safe.",
+                    account_number=acc,
+                )
+            else:
+                messagebox.showinfo("Identity Verified", msg)
+            try:
+                self.after(120, self.destroy)
+            except Exception:
+                self.destroy()
         else:
             messagebox.showerror("Failed", msg)
 
@@ -631,9 +765,19 @@ class RegisterFrame(ctk.CTkFrame):
         pin = self.pin.get()
         msg = self.master.controller.sign_up(name, pin)
         if "Created" in msg:
-            # Persistent modal for successful registration
-            messagebox.showinfo("Success - Save This!", msg)
-            self.master.show_login_frame()
+            acc = extract_account_number(msg)
+            if acc:
+                AccountInfoDialog(
+                    self.master,
+                    title="Account Created",
+                    subtitle="Your account is ready. Copy your account number and keep it safe.",
+                    account_number=acc,
+                    primary_action_text="Go to Login",
+                    primary_action=self.master.show_login_frame,
+                )
+            else:
+                messagebox.showinfo("Success - Save This!", msg)
+                self.master.show_login_frame()
         else:
             self.master.show_toast(msg, "error")
 
